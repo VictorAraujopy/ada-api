@@ -1,12 +1,12 @@
 """Liga a API da ADA: monta o app com as rotas do api/, sobe o worker do modelo e o uvicorn.
     ../core/.venv/bin/python main.py   (ADA_HOST=$(tailscale ip -4) pra tailnet, ADA_FAKE=1 sem o modelo)"""
 import uvicorn
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 
-from api import config, identidade, worker
+from api import config, identidade, limite, worker
 from api.rotas import chat, conversas, info
 
-app = FastAPI()
+app = FastAPI(dependencies=[Depends(limite.por_ip)])  # o rate limit vale pra todas as rotas
 app.include_router(info.rotas)
 app.include_router(conversas.rotas)
 app.include_router(chat.rotas)

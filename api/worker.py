@@ -1,12 +1,13 @@
 """A thread única dona do modelo: carrega a ADA uma vez e tira os pedidos da fila `entrada`, um por vez.
-Cada pedido é um Job com a própria fila de saída; no modo FAKE os eventos são de mentira, sem carregar o modelo."""
+Cada pedido é um Job com a própria fila de saída; no modo FAKE os eventos são de mentira, sem carregar o modelo.
+Quem grava a resposta no banco é o worker: se o cliente cair no meio do stream, ela fica salva igual."""
 import queue
 import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from api import config
+from api import armazem, config
 
 # Config, system prompt e params de geração vivem TODOS no núcleo (1_ada/cerebro.py): aqui só importa e repassa.
 # No modo FAKE o núcleo nem é carregado, então os systems ficam vazios (os eventos de mentira ignoram).
@@ -15,12 +16,21 @@ SYSTEMS = {"victor": "", "convidado": "", "visitante": ""}  # preenchidos quando
 
 @dataclass
 class Job:
+    conversa: str                                            # onde a resposta vai ser gravada
+    usuario: str                                             # de quem é o pedido
     historico: list                                          # snapshot da conversa
     saida: queue.Queue = field(default_factory=queue.Queue)  # eventos só deste job
 
 
 entrada = queue.Queue()
 pronta = threading.Event()
+em_andamento = {}  # usuario -> conversa que a ADA está respondendo pra ele (um pedido por pessoa)
+
+
+def pedir(job):
+    """Marca a conversa como sendo respondida e põe o job na fila; o worker desmarca quando termina."""
+    em_andamento[job.usuario] = job.conversa
+    entrada.put(job)
 
 
 def _eventos_fake(historico):
@@ -38,6 +48,27 @@ def _eventos_fake(historico):
         time.sleep(0.04)
         yield {"t": "resp", "d": palavra + " "}
     yield {"t": "fim"}
+
+
+def _atender(job, gerar):
+    """Repassa cada evento pra saída do job e grava a resposta antes do fim:
+    quem recarrega a conversa depois do fim já acha a resposta lá."""
+    resposta, think, tools = "", "", []
+    t0, t_resp = time.time(), None
+    for ev in gerar(job.historico):
+        if ev["t"] == "think":
+            think += ev["d"]
+        elif ev["t"] == "tool":
+            tools.append({"nome": ev["nome"], "res": str(ev["res"])[:200]})
+        elif ev["t"] == "resp":
+            t_resp = t_resp or time.time()
+            resposta += ev["d"]
+        elif ev["t"] == "fim" and resposta.strip():   # só entra na memória da conversa se a geração terminou
+            meta = {"pensou_s": round((t_resp or time.time()) - t0, 1),
+                    "respondeu_s": round(time.time() - (t_resp or time.time()), 1),
+                    "tools": tools, "think": think.strip()}
+            armazem.gravar(job.conversa, "assistant", resposta.strip(), meta)
+        job.saida.put(ev)
 
 
 def _rodar():
@@ -63,11 +94,11 @@ def _rodar():
     while True:
         job = entrada.get()
         try:
-            for ev in gerar(job.historico):
-                job.saida.put(ev)
+            _atender(job, gerar)
         except Exception as e:
             job.saida.put({"t": "erro", "d": f"{type(e).__name__}: {e}"})
         finally:
+            em_andamento.pop(job.usuario, None)
             job.saida.put(None)   # sinal de fim pro endpoint, aconteça o que acontecer
 
 

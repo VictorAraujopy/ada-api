@@ -12,7 +12,8 @@ main.py              liga tudo: monta o app com as rotas, sobe o worker e o uvic
 api/
   config.py          de onde vem cada config: o core, o .env, HOST, PORTA, FAKE
   identidade.py      IP -> victor / convidado / visitante
-  worker.py          a thread dona do modelo: fila de entrada, Job, pronta, modo fake
+  limite.py          os tetos: tamanho do texto e requisições por minuto por IP
+  worker.py          a thread dona do modelo: fila de entrada, Job, pronta, modo fake; grava a resposta
   armazem.py         SQLite: conversas e mensagens, com dono
   rotas/
     info.py          GET /info
@@ -45,7 +46,7 @@ e `visitante` (o resto da tailnet). Cada um tem a própria persona e só vê as 
 | `GET /info` | `pronta`, `adapter`, `fake`, `fila`, `usuario`, `origem` |
 | `GET /conversas` | as conversas de quem pede |
 | `POST /conversas` | cria (`{"titulo"}`) |
-| `GET /conversas/{id}` | a conversa com as mensagens (o `meta` do assistant traz think, tools e tempos) |
+| `GET /conversas/{id}` | a conversa com as mensagens (o `meta` do assistant traz think, tools e tempos) e `gerando` |
 | `PATCH /conversas/{id}` | renomeia (`{"titulo"}`) |
 | `DELETE /conversas/{id}` | apaga |
 | `GET /conversas/{id}/export` | markdown |
@@ -60,5 +61,21 @@ Eventos do `/chat`, um por linha `data: {...}`:
 | `resp` | `d`: pedaço da resposta |
 | `fim` | — |
 | `erro` | `d` |
+
+Quem grava a resposta é o worker, não o stream: se o app cair no meio, a ADA termina e grava igual.
+Ao voltar, o `GET /conversas/{id}` diz `gerando: true` enquanto ela ainda responde ali.
+
+## Erros e tetos
+
+| Código | Quando |
+|---|---|
+| 400 | msg vazia, conversa que não existe (ou de outra pessoa), título vazio no PATCH |
+| 404 | conversa que não existe (ou de outra pessoa) |
+| 409 | `/chat` com a ADA ainda respondendo o pedido anterior da mesma pessoa (um por vez) |
+| 422 | corpo fora do formato ou texto acima de 20 mil caracteres |
+| 429 | mais de 120 requisições no último minuto vindas do mesmo IP |
+| 503 | `/chat` antes da ADA terminar de carregar |
+
+400, 404, 409 e 503 vêm como `{"erro": "..."}`; 422 e 429 no formato padrão do FastAPI, `{"detail": ...}`.
 
 As conversas ficam em `dados/conversas.db` (SQLite, fora do git).

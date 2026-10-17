@@ -2,10 +2,15 @@
 Conversa de outra pessoa responde 404, igual a uma que não existe."""
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
+from pydantic import BaseModel, Field
 
-from api import armazem, identidade
+from api import armazem, identidade, limite, worker
 
 rotas = APIRouter()
+
+
+class Titulo(BaseModel):
+    titulo: str = Field("", max_length=limite.MAX_TEXTO)
 
 
 @rotas.get("/conversas")
@@ -14,23 +19,25 @@ def listar_conversas(req: Request):
 
 
 @rotas.post("/conversas")
-async def criar_conversa(req: Request):
-    corpo = await req.json()
-    return armazem.criar(corpo.get("titulo", ""), dono=identidade.usuario_de(req))
+def criar_conversa(corpo: Titulo, req: Request):
+    return armazem.criar(corpo.titulo, dono=identidade.usuario_de(req))
 
 
 @rotas.get("/conversas/{cid}")
 def abrir_conversa(cid: str, req: Request):
-    if not armazem.existe(cid, identidade.usuario_de(req)):
+    usuario = identidade.usuario_de(req)
+    if not armazem.existe(cid, usuario):
         return JSONResponse({"erro": "conversa não existe"}, status_code=404)
-    return {"id": cid, "titulo": armazem.titulo(cid), "mensagens": armazem.mensagens(cid)}
+    # gerando: a ADA ainda está respondendo aqui (o app caiu no meio e voltou); a resposta entra no banco quando acabar
+    return {"id": cid, "titulo": armazem.titulo(cid), "mensagens": armazem.mensagens(cid),
+            "gerando": worker.em_andamento.get(usuario) == cid}
 
 
 @rotas.patch("/conversas/{cid}")
-async def renomear_conversa(cid: str, req: Request):
+def renomear_conversa(cid: str, corpo: Titulo, req: Request):
     if not armazem.existe(cid, identidade.usuario_de(req)):
         return JSONResponse({"erro": "conversa não existe"}, status_code=404)
-    novo = armazem.renomear(cid, (await req.json()).get("titulo", ""))
+    novo = armazem.renomear(cid, corpo.titulo)
     if not novo:
         return JSONResponse({"erro": "título vazio"}, status_code=400)
     return {"ok": True, "titulo": novo}
@@ -47,12 +54,13 @@ def apagar_conversa(cid: str, req: Request):
 @rotas.get("/conversas/{cid}/export")
 def exportar(cid: str, req: Request):
     """Baixa a conversa em markdown (pra post, demo, arquivo)."""
-    if not armazem.existe(cid, identidade.usuario_de(req)):
+    usuario = identidade.usuario_de(req)
+    if not armazem.existe(cid, usuario):
         return JSONResponse({"erro": "conversa não existe"}, status_code=404)
     linhas = [f"# ADA — {armazem.titulo(cid)}", ""]
     for m in armazem.mensagens(cid):
         if m["role"] == "user":
-            linhas += [f"**Victor:** {m['content']}", ""]
+            linhas += [f"**{usuario.capitalize()}:** {m['content']}", ""]
         else:
             for t in (m["meta"] or {}).get("tools", []):
                 linhas.append(f"> 🔧 `{t['nome']}` → {t['res']}")
