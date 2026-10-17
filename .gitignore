@@ -1,0 +1,12 @@
+# Ambiente Python
+.venv/
+__pycache__/
+*.pyc
+.idea/
+.DS_Store
+
+# Conversas de verdade (dados pessoais): ficam só nesta máquina
+conversas.db*
+
+# Local da máquina
+.env
