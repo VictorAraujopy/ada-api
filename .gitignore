@@ -6,6 +6,7 @@ __pycache__/
 .DS_Store
 
 # Conversas de verdade (dados pessoais): ficam só nesta máquina
+dados/
 conversas.db*
 
 # Local da máquina

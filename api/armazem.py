@@ -1,6 +1,6 @@
 """Conversas da API no SQLite local (conversas.db): conversas + mensagens, com o meta do app no assistant.
 Uma conexão só, com lock: os endpoints rodam em threads do Starlette.
-Rodado direto vira log no terminal:  python3 armazem.py [id]"""
+Rodado direto vira log no terminal:  python3 api/armazem.py [id]"""
 import json
 import sqlite3
 import threading
@@ -8,7 +8,8 @@ import time
 import uuid
 from pathlib import Path
 
-DB = Path(__file__).resolve().parent / "conversas.db"
+DB = Path(__file__).resolve().parent.parent / "dados" / "conversas.db"
+DB.parent.mkdir(exist_ok=True)
 
 _con = sqlite3.connect(DB, check_same_thread=False)
 _con.row_factory = sqlite3.Row

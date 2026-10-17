@@ -2,16 +2,32 @@
 
 A API da ADA: FastAPI + SSE na frente do cérebro. Quem consome é o app (`ada-app`).
 
-O cérebro não mora aqui: o `server.py` importa o `1_ada/` do repo do core, que fica na pasta do lado
+O cérebro não mora aqui: a API importa o `1_ada/` do repo do core, que fica na pasta do lado
 (`../core`; `ADA_CORE` troca o caminho). O modelo roda dentro do mesmo processo, então a API usa o venv do core.
+
+## Organização
+
+```
+main.py              liga tudo: monta o app com as rotas, sobe o worker e o uvicorn
+api/
+  config.py          de onde vem cada config: o core, o .env, HOST, PORTA, FAKE
+  identidade.py      IP -> victor / convidado / visitante
+  worker.py          a thread dona do modelo: fila de entrada, Job, pronta, modo fake
+  armazem.py         SQLite: conversas e mensagens, com dono
+  rotas/
+    info.py          GET /info
+    conversas.py     CRUD das conversas + export
+    chat.py          POST /chat (o stream)
+dados/conversas.db   as conversas (fora do git)
+```
 
 ## Rodar
 
 ```bash
-../core/.venv/bin/python server.py                                          # só esta máquina -> http://127.0.0.1:8000
-ADA_FAKE=1 ../core/.venv/bin/python server.py                               # sem o modelo (eventos de mentira)
-ADA_HOST=$(tailscale ip -4) caffeinate -i ../core/.venv/bin/python server.py # na tailnet
-python3 armazem.py [id]                                                     # log das conversas no terminal
+../core/.venv/bin/python main.py                                          # só esta máquina -> http://127.0.0.1:8000
+ADA_FAKE=1 ../core/.venv/bin/python main.py                               # sem o modelo (eventos de mentira)
+ADA_HOST=$(tailscale ip -4) caffeinate -i ../core/.venv/bin/python main.py # na tailnet
+python3 api/armazem.py [id]                                               # log das conversas no terminal
 ```
 
 Config no `.env` do core: `ADA_HOST`, `ADA_PORT`, `ADA_IPS_VICTOR`, `ADA_IPS_CONVIDADO`, `ADA_ADAPTER`.
@@ -45,4 +61,4 @@ Eventos do `/chat`, um por linha `data: {...}`:
 | `fim` | — |
 | `erro` | `d` |
 
-As conversas ficam em `conversas.db` (SQLite, fora do git).
+As conversas ficam em `dados/conversas.db` (SQLite, fora do git).
