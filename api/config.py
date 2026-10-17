@@ -15,6 +15,8 @@ sys.path.insert(0, str(CORE / "1_ada"))
 load_dotenv(CORE / ".env")  # não sobrescreve variável que já veio do terminal
 
 FAKE = os.environ.get("ADA_FAKE") == "1"
+# o terminal do Mac pelo app (api/terminal.py): desligado se não vier ADA_TERMINAL=1
+TERMINAL = os.environ.get("ADA_TERMINAL") == "1"
 
 # ADA_HOST: 127.0.0.1 (so esta maquina) | IP do Tailscale (so a tailnet — modo convidado)
 # NUNCA use 0.0.0.0 sem firewall: exporia a ADA pra rede local inteira.

@@ -24,6 +24,8 @@ with _trava, _con:
     _con.execute("""CREATE TABLE IF NOT EXISTS mensagens (
         n INTEGER PRIMARY KEY AUTOINCREMENT, conversa TEXT NOT NULL,
         role TEXT NOT NULL, content TEXT NOT NULL, meta TEXT, criada REAL)""")
+    # segredos: só hash (ex.: a senha do terminal, ver api/senha.py)
+    _con.execute("CREATE TABLE IF NOT EXISTS segredos (nome TEXT PRIMARY KEY, valor TEXT NOT NULL)")
 
 
 def _sql(query, args=()):
@@ -43,9 +45,11 @@ def criar(primeira_msg, dono="victor"):
 
 
 def listar(dono="victor"):
-    """Só as conversas do dono — cada pessoa vê a própria sidebar."""
+    """Só as conversas do dono — cada pessoa vê a própria lista. A prévia é o começo da última resposta da ADA."""
     rs = _sql("""SELECT c.id, c.titulo, c.atualizada,
-                 (SELECT COUNT(*) FROM mensagens m WHERE m.conversa = c.id) AS n
+                 (SELECT COUNT(*) FROM mensagens m WHERE m.conversa = c.id) AS n,
+                 (SELECT substr(m.content, 1, 90) FROM mensagens m
+                  WHERE m.conversa = c.id AND m.role = 'assistant' ORDER BY m.n DESC LIMIT 1) AS previa
                  FROM conversas c WHERE c.dono = ? ORDER BY c.atualizada DESC""", (dono,))
     return [dict(r) for r in rs]
 
@@ -91,6 +95,15 @@ def renomear(cid, novo):
 def apagar(cid):
     _sql("DELETE FROM mensagens WHERE conversa=?", (cid,))
     _sql("DELETE FROM conversas WHERE id=?", (cid,))
+
+
+def gravar_segredo(nome, valor):
+    _sql("INSERT OR REPLACE INTO segredos VALUES (?,?)", (nome, valor))
+
+
+def segredo(nome):
+    r = _sql("SELECT valor FROM segredos WHERE nome=?", (nome,))
+    return r[0]["valor"] if r else None
 
 
 if __name__ == "__main__":

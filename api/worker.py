@@ -5,7 +5,6 @@ import queue
 import threading
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from api import armazem, config
 
@@ -79,14 +78,13 @@ def _rodar():
     else:
         import cerebro  # núcleo da ADA (só carrega o modelo fora do modo FAKE)
 
-        SYSTEMS["victor"] = cerebro.SYSTEM
-        SYSTEMS["convidado"] = cerebro.SYSTEM_CONVIDADO
-        SYSTEMS["visitante"] = cerebro.SYSTEM_VISITANTE
-        print(f"[api] carregando a ADA ({Path(cerebro.ADAPTER).name})... (uns 30-60s)")
-        model, processor, config_modelo = cerebro.carregar()
+        config_modelo = cerebro.configurar()
+        SYSTEMS.update(config_modelo.systems)
+        print(f"[api] carregando a ADA ({config_modelo.adapter})... (uns 30-60s)")
+        model, processor, config_modelo = cerebro.carregar(config_modelo)
 
         def gerar(historico):
-            return cerebro.responder_eventos(model, processor, config_modelo, historico, **cerebro.GEN)
+            return cerebro.responder_eventos(model, processor, config_modelo, historico, **config_modelo.geracao)
 
     pronta.set()
     print(f"[api] PRONTA  ->  {config.URL}")
