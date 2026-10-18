@@ -37,7 +37,7 @@ python3 api/armazem.py [id]                                               # log 
 ```
 
 Config no `.env` do core: `ADA_HOST`, `ADA_PORT`, `ADA_IPS_VICTOR`, `ADA_IPS_CONVIDADO`, `ADA_ADAPTER`,
-`ADA_TERMINAL` (ver Terminal do Mac).
+`ADA_TERMINAL` (ver Terminal do Mac), `ADA_DB` (outro banco no lugar do `dados/conversas.db`).
 Nunca `0.0.0.0`: o portão é a tailnet.
 
 Carregar a ADA leva uns 30-60s (até lá o `/info` diz `pronta: false` e o `/chat` responde 503). Depois, a 1ª
@@ -114,4 +114,5 @@ Roda comandos no Mac pelo app. Executa qualquer coisa como o dono do Mac, então
 
 Programa interativo (vim, top, REPL, sudo pedindo senha) não roda: não tem terminal de verdade (PTY) por trás.
 
-As conversas ficam em `dados/conversas.db` (SQLite, fora do git).
+As conversas ficam em `dados/conversas.db` (SQLite, fora do git). `ADA_DB=<arquivo>` troca o banco, por exemplo
+por um de demonstração: a senha do terminal mora no banco, então lá ela é outra.

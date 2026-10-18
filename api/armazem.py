@@ -2,13 +2,14 @@
 Uma conexão só, com lock: os endpoints rodam em threads do Starlette.
 Rodado direto vira log no terminal:  python3 api/armazem.py [id]"""
 import json
+import os
 import sqlite3
 import threading
 import time
 import uuid
 from pathlib import Path
 
-DB = Path(__file__).resolve().parent.parent / "dados" / "conversas.db"
+DB = Path(os.environ.get("ADA_DB") or Path(__file__).resolve().parent.parent / "dados" / "conversas.db")
 DB.parent.mkdir(exist_ok=True)
 
 _con = sqlite3.connect(DB, check_same_thread=False)
