@@ -3,3 +3,4 @@
 fastapi==0.136.3
 uvicorn==0.48.0
 python-dotenv==1.2.3    # lê o .env do core (IPs de quem é quem)
+pillow==12.2.0          # confere, endireita e encolhe as fotos do chat (api/fotos.py)

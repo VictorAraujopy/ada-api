@@ -7,6 +7,7 @@ from api import config, identidade, limite, senha, worker
 from api.rotas import chat, conversas, info, terminal
 
 app = FastAPI(dependencies=[Depends(limite.por_ip)])  # o rate limit vale pra todas as rotas
+app.add_middleware(limite.TamanhoDoCorpo)  # 413 pra corpo grande demais, antes de ler
 app.include_router(info.rotas)
 app.include_router(conversas.rotas)
 app.include_router(chat.rotas)

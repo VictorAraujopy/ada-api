@@ -1,4 +1,5 @@
-"""Conversas da API no SQLite local (conversas.db): conversas + mensagens, com o meta do app no assistant.
+"""Conversas da API no SQLite local (conversas.db): conversas + mensagens, com o meta do app no assistant
+e o nome da foto (api/fotos.py) na mensagem do usuário que mandou uma.
 Uma conexão só, com lock: os endpoints rodam em threads do Starlette.
 Rodado direto vira log no terminal:  python3 api/armazem.py [id]"""
 import json
@@ -25,6 +26,9 @@ with _trava, _con:
     _con.execute("""CREATE TABLE IF NOT EXISTS mensagens (
         n INTEGER PRIMARY KEY AUTOINCREMENT, conversa TEXT NOT NULL,
         role TEXT NOT NULL, content TEXT NOT NULL, meta TEXT, criada REAL)""")
+    # migração: coluna foto (mensagens antigas ficam sem)
+    if "foto" not in [c[1] for c in _con.execute("PRAGMA table_info(mensagens)")]:
+        _con.execute("ALTER TABLE mensagens ADD COLUMN foto TEXT")
     # segredos: só hash (ex.: a senha do terminal, ver api/senha.py)
     _con.execute("CREATE TABLE IF NOT EXISTS segredos (nome TEXT PRIMARY KEY, valor TEXT NOT NULL)")
 
@@ -74,16 +78,21 @@ def titulo(cid):
 
 
 def mensagens(cid):
-    rs = _sql("SELECT n, role, content, meta FROM mensagens WHERE conversa=? ORDER BY n", (cid,))
+    rs = _sql("SELECT n, role, content, meta, foto FROM mensagens WHERE conversa=? ORDER BY n", (cid,))
     return [{"n": r["n"], "role": r["role"], "content": r["content"],
-             "meta": json.loads(r["meta"]) if r["meta"] else None} for r in rs]
+             "meta": json.loads(r["meta"]) if r["meta"] else None, "foto": r["foto"]} for r in rs]
 
 
-def gravar(cid, role, content, meta=None):
-    _sql("INSERT INTO mensagens (conversa, role, content, meta, criada) VALUES (?,?,?,?,?)",
+def gravar(cid, role, content, meta=None, foto=None):
+    _sql("INSERT INTO mensagens (conversa, role, content, meta, criada, foto) VALUES (?,?,?,?,?,?)",
          (cid, role, content,
-          json.dumps(meta, ensure_ascii=False) if meta else None, time.time()))
+          json.dumps(meta, ensure_ascii=False) if meta else None, time.time(), foto))
     _sql("UPDATE conversas SET atualizada=? WHERE id=?", (time.time(), cid))
+
+
+def fotos(cid):
+    """Os nomes das fotos mandadas nessa conversa."""
+    return [r["foto"] for r in _sql("SELECT foto FROM mensagens WHERE conversa=? AND foto IS NOT NULL", (cid,))]
 
 
 def renomear(cid, novo):
@@ -122,4 +131,6 @@ if __name__ == "__main__":
         for m in mensagens(sys.argv[1]):
             for t in (m["meta"] or {}).get("tools", []):
                 print(f"  🔧 {t['nome']} → {t['res']}")
+            if m["foto"]:
+                print(f"  📷 dados/fotos/{m['foto']}")
             print(f"{'ADA' if m['role'] == 'assistant' else 'user'}: {m['content']}\n")

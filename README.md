@@ -12,24 +12,26 @@ main.py              liga tudo: monta o app com as rotas, sobe o worker e o uvic
 api/
   config.py          de onde vem cada config: o core, o .env, HOST, PORTA, FAKE, TERMINAL, ADAPTER
   identidade.py      IP -> victor / convidado / visitante
-  limite.py          os tetos: tamanho do texto e requisições por minuto por IP
+  limite.py          os tetos: tamanho do texto, da foto e do corpo, requisições por minuto por IP
+  fotos.py           as fotos do chat: confere, endireita, encolhe pra 1024 px e grava sem metadados
   senha.py           a senha do terminal: só o hash (scrypt) no banco; trocar pelo Mac
   terminal.py        o terminal do Mac: sessão, trava por senha errada, o comando e o Ctrl+C
   worker.py          a thread dona do modelo: fila de entrada, Job, pronta, modo fake; grava a resposta
-  armazem.py         SQLite: conversas e mensagens, com dono
+  armazem.py         SQLite: conversas e mensagens, com dono e o nome da foto
   rotas/
     info.py          GET /info
-    conversas.py     CRUD das conversas + export
+    conversas.py     CRUD das conversas + fotos + export
     chat.py          POST /chat (o stream)
     terminal.py      /terminal/* (só o victor, só com ADA_TERMINAL=1)
 dados/conversas.db   as conversas e o hash da senha do terminal (fora do git)
 dados/terminal.log   cada comando rodado pelo app, com o código de saída (fora do git)
+dados/fotos/         as fotos mandadas no chat (fora do git; saem junto com a conversa)
 ```
 
 ## Rodar
 
 ```bash
-../core/.venv/bin/pip install -r requirements.txt                         # uma vez: fastapi, uvicorn e python-dotenv no venv do core
+../core/.venv/bin/pip install -r requirements.txt                         # uma vez: fastapi, uvicorn, python-dotenv e pillow no venv do core
 ../core/.venv/bin/python main.py                                          # só esta máquina -> http://127.0.0.1:8000
 ADA_FAKE=1 ../core/.venv/bin/python main.py                               # sem o modelo (eventos de mentira)
 ADA_HOST=$(tailscale ip -4) caffeinate -i ../core/.venv/bin/python main.py # na tailnet
@@ -56,11 +58,12 @@ e `visitante` (o resto da tailnet). Cada um tem a própria persona e só vê as 
 | `GET /info` | `pronta`, `adapter`, `fake`, `fila`, `usuario`, `origem`, `terminal` (aberto pra quem pede?) |
 | `GET /conversas` | as conversas de quem pede, com a `previa` (começo da última resposta) |
 | `POST /conversas` | cria (`{"titulo"}`, encurtado em 46 caracteres) -> `id`, `titulo` |
-| `GET /conversas/{id}` | a conversa com as mensagens (o `meta` do assistant traz think, tools e tempos) e `gerando` |
+| `GET /conversas/{id}` | a conversa com as mensagens (o `meta` do assistant traz think, tools e tempos; `foto` é o nome da foto ou `null`) e `gerando` |
+| `GET /conversas/{id}/fotos/{nome}` | a foto (JPEG) de uma mensagem dessa conversa |
 | `PATCH /conversas/{id}` | renomeia (`{"titulo"}`) |
-| `DELETE /conversas/{id}` | apaga |
+| `DELETE /conversas/{id}` | apaga, junto com as fotos dela |
 | `GET /conversas/{id}/export` | markdown |
-| `POST /chat` | `{"conversa", "msg"}` -> stream SSE |
+| `POST /chat` | `{"conversa", "msg", "foto"}` -> stream SSE (`foto` opcional: JPEG, PNG ou WebP em base64; com foto, `msg` pode vir vazia) |
 | `GET /terminal/estado` | `tem_senha` |
 | `POST /terminal/entrar` | `{"senha"}` -> `sessao`, `pasta` (sem senha no banco, cria esta) |
 | `POST /terminal/rodar` | `{"cmd", "pasta"}` -> stream SSE: `saida` (`d`) ... `fim` (`codigo`, `s`, `pasta` onde terminou) |
@@ -80,20 +83,26 @@ Eventos do `/chat`, um por linha `data: {...}`:
 Quem grava a resposta é o worker, não o stream: se o app cair no meio, a ADA termina e grava igual.
 Ao voltar, o `GET /conversas/{id}` diz `gerando: true` enquanto ela ainda responde ali.
 
+A foto é regravada como JPEG novo de até 1024 px de lado (endireitada pela orientação da câmera e sem os
+metadados, GPS incluído). Pro cérebro, só as 4 últimas fotos da conversa entram como imagem; as mais antigas
+ficam pelo texto. Cada foto custa até 1024 tokens e uns 25 s na primeira leitura; a pergunta seguinte sobre
+a mesma foto sai da memória do cérebro, sem ler a foto de novo.
+
 ## Erros e tetos
 
 | Código | Quando |
 |---|---|
-| 400 | msg vazia, conversa que não existe (ou de outra pessoa), título vazio no PATCH, senha nova curta, pasta que não existe |
+| 400 | msg vazia sem foto, foto que não abre (ou fora de JPEG/PNG/WebP, acima de 10 MB ou de 50 milhões de pixels), conversa que não existe (ou de outra pessoa), título vazio no PATCH, senha nova curta, pasta que não existe |
 | 401 | terminal: senha errada (diz quantas faltam) ou sessão expirada |
-| 404 | conversa que não existe (ou de outra pessoa); terminal desligado ou pedido de quem não é o `victor` |
+| 404 | conversa ou foto que não existe (ou de outra pessoa); terminal desligado ou pedido de quem não é o `victor` |
 | 409 | `/chat` com a ADA ainda respondendo o pedido anterior da mesma pessoa (um por vez); terminal com comando rodando, ou parar sem nada rodando |
+| 413 | corpo acima do teto (a foto de 10 MB em base64, o texto e folga) |
 | 423 | terminal travado por 5 senhas erradas seguidas (15 min) |
 | 422 | corpo fora do formato ou texto acima de 20 mil caracteres (no terminal: comando até 4 mil, pasta até mil, senha até 200) |
 | 429 | mais de 120 requisições no último minuto vindas do mesmo IP |
 | 503 | `/chat` antes da ADA terminar de carregar |
 
-400, 401, 404, 409, 423 e 503 vêm como `{"erro": "..."}`; 422 e 429 no formato padrão do FastAPI, `{"detail": ...}`.
+400, 401, 404, 409, 413, 423 e 503 vêm como `{"erro": "..."}`; 422 e 429 no formato padrão do FastAPI, `{"detail": ...}`.
 A exceção é o 404 do terminal barrado: vem como `{"detail": "Not Found"}`, igual ao de uma rota que não existe.
 
 ## Terminal do Mac

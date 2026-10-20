@@ -34,7 +34,9 @@ def pedir(job):
 
 def _eventos_fake(historico):
     """Eventos de mentira (think -> tool -> resp) pra testar o app sem o modelo."""
-    msg = historico[-1]["content"]
+    ultima = historico[-1]["content"]
+    # com foto, o conteúdo vem em partes (imagem + texto): o fake só repete o texto
+    msg = ultima if isinstance(ultima, str) else "[foto] " + ultima[-1]["text"]
     pensamento = (f'O Victor mandou "{msg}". Modo fake ligado, então eu não penso de '
                   f'verdade — só finjo bem. Vou fingir uma tool também. ')
     for palavra in pensamento.split(" "):
