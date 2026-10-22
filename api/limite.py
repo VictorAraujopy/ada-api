@@ -1,9 +1,9 @@
-"""Os tetos da API: o tamanho do texto e da foto que entram e quantas requisições cada IP faz por minuto.
+"""Os tetos da API: o tamanho do texto e da foto que entram e quantas requisições entram por minuto.
 A tailnet já é o portão; isto segura um aparelho com bug (ou mal-intencionado) lá dentro."""
 import time
-from collections import defaultdict, deque
+from collections import deque
 
-from fastapi import HTTPException, Request
+from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 
 # 20 mil caracteres ~ 5 a 7 mil tokens: cabe um arquivo de código colado e ainda sobra contexto
@@ -27,19 +27,17 @@ MAX_FOTOS_NO_CONTEXTO = 4
 # o app faz poucas por ação (lista, abre, manda); 120 dá folga até pra perguntar a cada segundo se a resposta saiu
 POR_MINUTO = 120
 
-_recentes = defaultdict(deque)  # ip -> horários das requisições do último minuto
+_recentes = deque()  # horários das requisições do último minuto
 
 
-async def por_ip(req: Request):
+async def por_minuto():
     """Dependência de todas as rotas: passou de POR_MINUTO no último minuto, 429."""
-    ip = req.client.host if req.client else ""
     agora = time.monotonic()
-    horarios = _recentes[ip]
-    while horarios and agora - horarios[0] > 60:
-        horarios.popleft()
-    if len(horarios) >= POR_MINUTO:
+    while _recentes and agora - _recentes[0] > 60:
+        _recentes.popleft()
+    if len(_recentes) >= POR_MINUTO:
         raise HTTPException(429, "requisições demais: espera um pouco")
-    horarios.append(agora)
+    _recentes.append(agora)
 
 
 class TamanhoDoCorpo:

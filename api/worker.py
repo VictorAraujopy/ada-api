@@ -9,26 +9,26 @@ from dataclasses import dataclass, field
 from api import armazem, config
 
 # Config, system prompt e params de geração vivem TODOS no núcleo (1_ada/cerebro.py): aqui só importa e repassa.
-# No modo FAKE o núcleo nem é carregado, então os systems ficam vazios (os eventos de mentira ignoram).
-SYSTEMS = {"victor": "", "convidado": "", "visitante": ""}  # preenchidos quando o modelo carrega
+# No modo FAKE o núcleo nem é carregado, então o system fica vazio (os eventos de mentira ignoram).
+SYSTEM = ""  # preenchido quando o modelo carrega
 
 
 @dataclass
 class Job:
     conversa: str                                            # onde a resposta vai ser gravada
-    usuario: str                                             # de quem é o pedido
     historico: list                                          # snapshot da conversa
     saida: queue.Queue = field(default_factory=queue.Queue)  # eventos só deste job
 
 
 entrada = queue.Queue()
 pronta = threading.Event()
-em_andamento = {}  # usuario -> conversa que a ADA está respondendo pra ele (um pedido por pessoa)
+respondendo = None  # a conversa que a ADA está respondendo agora (um pedido por vez)
 
 
 def pedir(job):
     """Marca a conversa como sendo respondida e põe o job na fila; o worker desmarca quando termina."""
-    em_andamento[job.usuario] = job.conversa
+    global respondendo
+    respondendo = job.conversa
     entrada.put(job)
 
 
@@ -42,7 +42,7 @@ def _eventos_fake(historico):
     for palavra in pensamento.split(" "):
         time.sleep(0.03)
         yield {"t": "think", "d": palavra + " "}
-    yield {"t": "tool", "nome": "que_horas", "args": {}, "res": "segunda, 09/06/2026, 16:20"}
+    yield {"t": "tool", "nome": "calcular", "args": {"expressao": "6*7"}, "res": "6*7 = 42"}
     resposta = ("Interface de ponta a ponta, com **negrito**, `código` e\n"
                 "- até lista\n- funcionando.\n\nQuando for pra valer, tira o ADA_FAKE=1. ")
     for palavra in resposta.split(" "):
@@ -74,6 +74,7 @@ def _atender(job, gerar):
 
 def _rodar():
     """Carrega uma vez e processa um job por vez."""
+    global SYSTEM, respondendo
     if config.FAKE:
         gerar = _eventos_fake
         print("[api] MODO FAKE — sem modelo, eventos de mentira")
@@ -81,7 +82,7 @@ def _rodar():
         import cerebro  # núcleo da ADA (só carrega o modelo fora do modo FAKE)
 
         config_modelo = cerebro.configurar()
-        SYSTEMS.update(config_modelo.systems)
+        SYSTEM = config_modelo.system
         print(f"[api] carregando a ADA ({config_modelo.adapter})... (uns 30-60s)")
         model, processor, config_modelo = cerebro.carregar(config_modelo)
 
@@ -98,7 +99,7 @@ def _rodar():
         except Exception as e:
             job.saida.put({"t": "erro", "d": f"{type(e).__name__}: {e}"})
         finally:
-            em_andamento.pop(job.usuario, None)
+            respondendo = None
             job.saida.put(None)   # sinal de fim pro endpoint, aconteça o que acontecer
 
 

@@ -18,7 +18,7 @@ FAKE = os.environ.get("ADA_FAKE") == "1"
 # o terminal do Mac pelo app (api/terminal.py): desligado se não vier ADA_TERMINAL=1
 TERMINAL = os.environ.get("ADA_TERMINAL") == "1"
 
-# ADA_HOST: 127.0.0.1 (so esta maquina) | IP do Tailscale (so a tailnet — modo convidado)
+# ADA_HOST: 127.0.0.1 (so esta maquina) | IP do Tailscale (so a tailnet)
 # NUNCA use 0.0.0.0 sem firewall: exporia a ADA pra rede local inteira.
 # `or`: ADA_HOST vazio (ex.: $(tailscale ip) que falhou) NUNCA pode virar 0.0.0.0
 HOST = os.environ.get("ADA_HOST") or "127.0.0.1"

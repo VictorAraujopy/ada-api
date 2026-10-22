@@ -1,5 +1,5 @@
 """O terminal do Mac pelo app: a senha abre uma sessão, um comando roda por vez, a saída sai em eventos e o parar é Ctrl+C.
-Quem barra (ADA_TERMINAL=1 e só o victor) é a rota, em api/rotas/terminal.py. Cada comando vai pro dados/terminal.log."""
+Quem barra (ADA_TERMINAL=1) é a rota, em api/rotas/terminal.py. Cada comando vai pro dados/terminal.log."""
 import codecs
 import os
 import queue

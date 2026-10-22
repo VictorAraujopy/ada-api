@@ -20,9 +20,9 @@ _trava = threading.Lock()
 with _trava, _con:
     _con.execute("""CREATE TABLE IF NOT EXISTS conversas (
         id TEXT PRIMARY KEY, titulo TEXT, criada REAL, atualizada REAL)""")
-    # migração: coluna dono (conversas antigas viram do victor)
-    if "dono" not in [c[1] for c in _con.execute("PRAGMA table_info(conversas)")]:
-        _con.execute("ALTER TABLE conversas ADD COLUMN dono TEXT DEFAULT 'victor'")
+    # migração: a coluna dono sai (a API tem um usuário só)
+    if "dono" in [c[1] for c in _con.execute("PRAGMA table_info(conversas)")]:
+        _con.execute("ALTER TABLE conversas DROP COLUMN dono")
     _con.execute("""CREATE TABLE IF NOT EXISTS mensagens (
         n INTEGER PRIMARY KEY AUTOINCREMENT, conversa TEXT NOT NULL,
         role TEXT NOT NULL, content TEXT NOT NULL, meta TEXT, criada REAL)""")
@@ -38,38 +38,29 @@ def _sql(query, args=()):
         return _con.execute(query, args).fetchall()
 
 
-def criar(primeira_msg, dono="victor"):
-    """Cria a conversa (título = primeira mensagem encurtada) já com dono."""
+def criar(primeira_msg):
+    """Cria a conversa (título = primeira mensagem encurtada)."""
     titulo = " ".join((primeira_msg or "conversa").split())
     if len(titulo) > 46:
         titulo = titulo[:46].rstrip() + "…"
     cid = uuid.uuid4().hex[:12]
     agora = time.time()
-    _sql("INSERT INTO conversas VALUES (?,?,?,?,?)", (cid, titulo, agora, agora, dono))
+    _sql("INSERT INTO conversas (id, titulo, criada, atualizada) VALUES (?,?,?,?)", (cid, titulo, agora, agora))
     return {"id": cid, "titulo": titulo}
 
 
-def listar(dono="victor"):
-    """Só as conversas do dono — cada pessoa vê a própria lista. A prévia é o começo da última resposta da ADA."""
+def listar():
+    """As conversas, da mais recente pra mais antiga. A prévia é o começo da última resposta da ADA."""
     rs = _sql("""SELECT c.id, c.titulo, c.atualizada,
                  (SELECT COUNT(*) FROM mensagens m WHERE m.conversa = c.id) AS n,
                  (SELECT substr(m.content, 1, 90) FROM mensagens m
                   WHERE m.conversa = c.id AND m.role = 'assistant' ORDER BY m.n DESC LIMIT 1) AS previa
-                 FROM conversas c WHERE c.dono = ? ORDER BY c.atualizada DESC""", (dono,))
-    return [dict(r) for r in rs]
-
-
-def listar_todas():
-    """Todas as conversas, com dono — pro log no terminal."""
-    rs = _sql("""SELECT c.id, c.dono, c.titulo, c.atualizada,
-                 (SELECT COUNT(*) FROM mensagens m WHERE m.conversa = c.id) AS n
                  FROM conversas c ORDER BY c.atualizada DESC""")
     return [dict(r) for r in rs]
 
 
-def existe(cid, dono):
-    """A conversa existe e é desse dono."""
-    return bool(_sql("SELECT 1 FROM conversas WHERE id=? AND dono=?", (cid, dono)))
+def existe(cid):
+    return bool(_sql("SELECT 1 FROM conversas WHERE id=?", (cid,)))
 
 
 def titulo(cid):
@@ -121,9 +112,9 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) < 2:
-        for c in listar_todas():
+        for c in listar():
             quando = time.strftime("%d/%m %H:%M", time.localtime(c["atualizada"]))
-            print(f"{c['dono']:<10} {c['id']}  {quando}  {c['n']:>3} msgs  {c['titulo']}")
+            print(f"{c['id']}  {quando}  {c['n']:>3} msgs  {c['titulo']}")
     elif not titulo(sys.argv[1]):
         sys.exit("conversa não existe")
     else:

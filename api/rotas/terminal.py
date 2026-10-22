@@ -1,5 +1,5 @@
 """O terminal do Mac: GET /terminal/estado, POST /terminal/entrar (senha -> sessão), /rodar (stream), /parar (Ctrl+C) e /sair.
-Desligado (sem ADA_TERMINAL=1) ou pedido de quem não é o victor: 404, como se a rota não existisse.
+Desligado (sem ADA_TERMINAL=1): 404, como se a rota não existisse.
 Depois de entrar, a sessão vai no cabeçalho:  Authorization: Bearer <sessao>"""
 import json
 import os
@@ -8,7 +8,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from api import config, identidade, senha, terminal
+from api import config, senha, terminal
 
 rotas = APIRouter()
 
@@ -22,9 +22,9 @@ class PedidoComando(BaseModel):
     pasta: str = Field("~", max_length=1000)
 
 
-def _barrado(req):
+def _barrado():
     """A resposta de barrado (404 igual ao de rota inexistente), ou None quando pode passar."""
-    if not config.TERMINAL or identidade.usuario_de(req) != "victor":
+    if not config.TERMINAL:
         return JSONResponse({"detail": "Not Found"}, status_code=404)
     return None
 
@@ -36,16 +36,16 @@ def _sessao_de(req):
 # as rotas são async de propósito (como o /chat): rodam no loop, uma por vez, então contador de senha
 # errada e "já tem comando rodando" não têm corrida entre duas requisições
 @rotas.get("/terminal/estado")
-async def estado(req: Request):
+async def estado():
     """O app pergunta antes de mostrar o campo: sem senha no banco, ele pede pra criar (digitada duas vezes)."""
-    if barrado := _barrado(req):
+    if barrado := _barrado():
         return barrado
     return {"tem_senha": senha.existe()}
 
 
 @rotas.post("/terminal/entrar")
-async def entrar(corpo: Entrada, req: Request):
-    if barrado := _barrado(req):
+async def entrar(corpo: Entrada):
+    if barrado := _barrado():
         return barrado
     # primeira vez: o app só CRIA quando não tem senha nenhuma; trocar a que existe é só no Mac (python -m api.senha)
     if not senha.existe():
@@ -66,7 +66,7 @@ async def entrar(corpo: Entrada, req: Request):
 
 @rotas.post("/terminal/rodar")
 async def rodar(pedido: PedidoComando, req: Request):
-    if barrado := _barrado(req):
+    if barrado := _barrado():
         return barrado
     if not terminal.sessao_valida(_sessao_de(req)):
         return JSONResponse({"erro": "sessão expirada: abre o terminal de novo"}, status_code=401)
@@ -91,7 +91,7 @@ async def rodar(pedido: PedidoComando, req: Request):
 
 @rotas.post("/terminal/parar")
 async def parar(req: Request):
-    if barrado := _barrado(req):
+    if barrado := _barrado():
         return barrado
     if not terminal.sessao_valida(_sessao_de(req)):
         return JSONResponse({"erro": "sessão expirada: abre o terminal de novo"}, status_code=401)
@@ -103,7 +103,7 @@ async def parar(req: Request):
 
 @rotas.post("/terminal/sair")
 async def sair(req: Request):
-    if barrado := _barrado(req):
+    if barrado := _barrado():
         return barrado
     terminal.sair(_sessao_de(req))
     return {"ok": True}
