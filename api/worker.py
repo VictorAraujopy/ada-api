@@ -1,12 +1,14 @@
 """A thread única dona do modelo: carrega a ADA uma vez e tira os pedidos da fila `entrada`, um por vez.
 Cada pedido é um Job com a própria fila de saída; no modo FAKE os eventos são de mentira, sem carregar o modelo.
-Quem grava a resposta no banco é o worker: se o cliente cair no meio do stream, ela fica salva igual."""
+Quem grava a pergunta e a resposta no banco é o worker, juntas, pela guardar do core: se o cliente cair no meio
+do stream, elas ficam salvas igual."""
 import queue
 import threading
 import time
 from dataclasses import dataclass, field
 
-from api import armazem, config
+from api import config
+from conhecimento.conhecimento import guardar  # 1_ada do core: o config acima põe ele no sys.path
 
 # Config, system prompt e params de geração vivem TODOS no núcleo (1_ada/cerebro.py): aqui só importa e repassa.
 # No modo FAKE o núcleo nem é carregado, então o system fica vazio (os eventos de mentira ignoram).
@@ -52,8 +54,8 @@ def _eventos_fake(historico):
 
 
 def _atender(job, gerar):
-    """Repassa cada evento pra saída do job e grava a resposta antes do fim:
-    quem recarrega a conversa depois do fim já acha a resposta lá."""
+    """Repassa cada evento pra saída do job e grava a pergunta e a resposta antes do fim:
+    quem recarrega a conversa depois do fim já acha as duas lá."""
     resposta, think, tools = "", "", []
     t0, t_resp = time.time(), None
     for ev in gerar(job.historico):
@@ -68,7 +70,8 @@ def _atender(job, gerar):
             meta = {"pensou_s": round((t_resp or time.time()) - t0, 1),
                     "respondeu_s": round(time.time() - (t_resp or time.time()), 1),
                     "tools": tools, "think": think.strip()}
-            armazem.gravar(job.conversa, "assistant", resposta.strip(), meta)
+            historico_com_resposta = job.historico + [{"role": "assistant", "content": resposta.strip()}]
+            guardar(job.conversa, historico_com_resposta, meta)
         job.saida.put(ev)
 
 

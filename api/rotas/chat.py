@@ -1,5 +1,6 @@
-"""POST /chat: grava a mensagem (e a foto, se veio), põe o pedido na fila do worker e repassa os eventos por SSE.
-A resposta da ADA quem grava é o worker: se o stream cair no meio, ela entra no banco igual."""
+"""POST /chat: grava a foto (se veio), põe o pedido na fila do worker e repassa os eventos por SSE.
+A pergunta e a resposta quem grava é o worker, juntas, quando a ADA termina: se o stream cair no meio, elas entram
+no banco igual."""
 import json
 
 from fastapi import APIRouter
@@ -19,11 +20,11 @@ class PedidoChat(BaseModel):
 
 def historico_do_modelo(mensagens):
     """System + turnos; as últimas MAX_FOTOS_NO_CONTEXTO fotos entram como imagem pro cérebro ler."""
-    com_foto = [m["n"] for m in mensagens if m["foto"]]
-    fotos_que_entram = set(com_foto[-limite.MAX_FOTOS_NO_CONTEXTO:])
+    posicoes_com_foto = [i for i, m in enumerate(mensagens) if m["foto"]]
+    fotos_que_entram = set(posicoes_com_foto[-limite.MAX_FOTOS_NO_CONTEXTO:])
     historico = [{"role": "system", "content": worker.SYSTEM}]
-    for m in mensagens:
-        if m["n"] in fotos_que_entram:
+    for i, m in enumerate(mensagens):
+        if i in fotos_que_entram:
             conteudo = [{"type": "image", "arquivo": str(fotos.caminho(m["foto"]))},
                         {"type": "text", "text": m["content"]}]
         else:
@@ -51,9 +52,10 @@ async def chat(pedido: PedidoChat):
         except fotos.FotoInvalida as motivo:
             return JSONResponse({"erro": str(motivo)}, status_code=400)
 
-    armazem.gravar(pedido.conversa, "user", msg, foto=nome_da_foto)
-    # o histórico do modelo é remontado do banco a cada pedido
-    historico = historico_do_modelo(armazem.mensagens(pedido.conversa))
+    # a pergunta ainda não vai pro banco: entra junto com a resposta, quando o worker termina
+    pergunta = {"role": "user", "content": msg, "foto": nome_da_foto}
+    # o histórico do modelo é remontado do banco a cada pedido, com a pergunta nova no fim
+    historico = historico_do_modelo(armazem.mensagens(pedido.conversa) + [pergunta])
     job = worker.Job(conversa=pedido.conversa, historico=historico)
     worker.pedir(job)
 

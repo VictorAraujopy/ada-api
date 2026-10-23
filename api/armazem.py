@@ -1,6 +1,7 @@
 """Conversas da API no SQLite local (conversas.db): conversas + mensagens, com o meta do app no assistant
 e o nome da foto (api/fotos.py) na mensagem do usuário que mandou uma.
-Uma conexão só, com lock: os endpoints rodam em threads do Starlette.
+As mensagens quem grava é a guardar do core (1_ada/conhecimento/conhecimento.py), com a conexão dela.
+Aqui, uma conexão só, com lock: os endpoints rodam em threads do Starlette.
 Rodado direto vira log no terminal:  python3 api/armazem.py [id]"""
 import json
 import os
@@ -72,13 +73,6 @@ def mensagens(cid):
     rs = _sql("SELECT n, role, content, meta, foto FROM mensagens WHERE conversa=? ORDER BY n", (cid,))
     return [{"n": r["n"], "role": r["role"], "content": r["content"],
              "meta": json.loads(r["meta"]) if r["meta"] else None, "foto": r["foto"]} for r in rs]
-
-
-def gravar(cid, role, content, meta=None, foto=None):
-    _sql("INSERT INTO mensagens (conversa, role, content, meta, criada, foto) VALUES (?,?,?,?,?,?)",
-         (cid, role, content,
-          json.dumps(meta, ensure_ascii=False) if meta else None, time.time(), foto))
-    _sql("UPDATE conversas SET atualizada=? WHERE id=?", (time.time(), cid))
 
 
 def fotos(cid):
