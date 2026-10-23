@@ -59,7 +59,7 @@ aparelho que o Tailscale deixa chegar no Mac.
 | `GET /conversas/{id}` | a conversa com as mensagens (o `meta` do assistant traz think, tools e tempos; `foto` é o nome da foto ou `null`) e `gerando` |
 | `GET /conversas/{id}/fotos/{nome}` | a foto (JPEG) de uma mensagem dessa conversa |
 | `PATCH /conversas/{id}` | renomeia (`{"titulo"}`) |
-| `DELETE /conversas/{id}` | apaga, junto com as fotos dela |
+| `DELETE /conversas/{id}` | apaga, junto com as fotos dela e os vetores do RAG das mensagens dela |
 | `GET /conversas/{id}/export` | markdown |
 | `POST /chat` | `{"conversa", "msg", "foto"}` -> stream SSE (`foto` opcional: JPEG, PNG ou WebP em base64; com foto, `msg` pode vir vazia) |
 | `GET /terminal/estado` | `tem_senha` |

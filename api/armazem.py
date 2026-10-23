@@ -88,6 +88,10 @@ def renomear(cid, novo):
 
 
 def apagar(cid):
+    """Apaga a conversa, as mensagens dela e os vetores do RAG dessas mensagens (a vetorizado nasce no core)."""
+    tem_vetores = _sql("SELECT 1 FROM sqlite_master WHERE type='table' AND name='vetorizado'")
+    if tem_vetores:
+        _sql("DELETE FROM vetorizado WHERE id IN (SELECT n FROM mensagens WHERE conversa=?)", (cid,))
     _sql("DELETE FROM mensagens WHERE conversa=?", (cid,))
     _sql("DELETE FROM conversas WHERE id=?", (cid,))
 
