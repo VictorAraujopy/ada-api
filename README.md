@@ -15,7 +15,7 @@ api/
   fotos.py           as fotos do chat: confere, endireita, encolhe pra 1024 px e grava sem metadados
   senha.py           a senha do terminal: só o hash (scrypt) no banco; trocar pelo Mac
   terminal.py        o terminal do Mac: sessão, trava por senha errada, o comando e o Ctrl+C
-  worker.py          a thread dona do modelo: fila de entrada, Job, pronta, modo fake; grava a resposta
+  worker.py          a thread dona do modelo: fila de entrada, Job, pronta, modo fake; grava pergunta + resposta
   armazem.py         SQLite: conversas e mensagens, com o nome da foto
   rotas/
     info.py          GET /info
@@ -78,7 +78,8 @@ Eventos do `/chat`, um por linha `data: {...}`:
 | `fim` | — |
 | `erro` | `d` |
 
-Quem grava a resposta é o worker, não o stream: se o app cair no meio, a ADA termina e grava igual.
+Quem grava é o worker, não o stream: a pergunta e a resposta entram juntas, pela `guardar` do core (que também
+vetoriza o par pro RAG), quando a ADA termina. Se o app cair no meio, ela termina e grava igual.
 Ao voltar, o `GET /conversas/{id}` diz `gerando: true` enquanto ela ainda responde ali.
 
 A foto é regravada como JPEG novo de até 1024 px de lado (endireitada pela orientação da câmera e sem os
