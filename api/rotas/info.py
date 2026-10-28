@@ -11,5 +11,5 @@ rotas = APIRouter()
 @rotas.get("/info")
 def info():
     """O app consulta isto pra saber se já pode liberar o input."""
-    return {"pronta": worker.pronta.is_set(), "adapter": Path(config.ADAPTER).name,
+    return {"pronta": worker.pronta.is_set(), "adapter": Path(worker.adapter_carregado or config.ADAPTER).name,
             "fake": config.FAKE, "fila": worker.entrada.qsize(), "terminal": config.TERMINAL}

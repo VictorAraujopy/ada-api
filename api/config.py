@@ -26,4 +26,4 @@ PORTA = int(os.environ.get("ADA_PORT", 8000))
 URL = f"http://{HOST}:{PORTA}"
 
 # só pro /info — mesmo nome que o cerebro.py usa (ADA_ADAPTER="" roda o 27B cru)
-ADAPTER = os.environ.get("ADA_ADAPTER", "ada_1_0_27b") or "qwen3.8_27b_cru"
+ADAPTER = os.environ.get("ADA_ADAPTER", "ada_1_0_2_27b") or "qwen3.8_27b_cru"

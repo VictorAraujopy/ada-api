@@ -25,6 +25,7 @@ class Job:
 entrada = queue.Queue()
 pronta = threading.Event()
 respondendo = None  # a conversa que a ADA está respondendo agora (um pedido por vez)
+adapter_carregado = None  # o que o cerebro.carregar() escolheu (a de 4 bits com o PC, ou a do Mac)
 
 
 def pedir(job):
@@ -77,7 +78,7 @@ def _atender(job, gerar):
 
 def _rodar():
     """Carrega uma vez e processa um job por vez."""
-    global SYSTEM, respondendo
+    global SYSTEM, respondendo, adapter_carregado
     if config.FAKE:
         gerar = _eventos_fake
         print("[api] MODO FAKE — sem modelo, eventos de mentira")
@@ -88,6 +89,9 @@ def _rodar():
         SYSTEM = config_modelo.system
         print(f"[api] carregando a ADA ({config_modelo.adapter})... (uns 30-60s)")
         model, processor, config_modelo = cerebro.carregar(config_modelo)
+        adapter_carregado = config_modelo.adapter
+        onde = f"dividida com o PC ({config_modelo.servidor_rpc})" if config_modelo.servidor_rpc else "só no Mac"
+        print(f"[api] carregou {adapter_carregado}, {onde}")
 
         def gerar(historico):
             return cerebro.responder_eventos(model, processor, config_modelo, historico, **config_modelo.geracao)
