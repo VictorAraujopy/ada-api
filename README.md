@@ -16,11 +16,13 @@ api/
   senha.py           a senha do terminal: só o hash (scrypt) no banco; trocar pelo Mac
   terminal.py        o terminal do Mac: sessão, trava por senha errada, o comando e o Ctrl+C
   worker.py          a thread dona do modelo: fila de entrada, Job, pronta, modo fake; grava pergunta + resposta
+  transcricao.py     o ouvido: abre o Whisper do core (1_ada/voz) numa thread e transcreve um pedaço por vez
   armazem.py         SQLite: conversas e mensagens, com o nome da foto
   rotas/
     info.py          GET /info
     conversas.py     CRUD das conversas + fotos + export
     chat.py          POST /chat (o stream)
+    ouvir.py         POST /ouvir: um pedaço de fala vira texto (o HTTP; quem transcreve é o transcricao.py)
     terminal.py      /terminal/* (só com ADA_TERMINAL=1)
 dados/conversas.db   as conversas e o hash da senha do terminal (fora do git)
 dados/terminal.log   cada comando rodado pelo app, com o código de saída (fora do git)
@@ -53,7 +55,7 @@ aparelho que o Tailscale deixa chegar no Mac.
 
 | Rota | O quê |
 |---|---|
-| `GET /info` | `pronta`, `adapter`, `fake`, `fila`, `terminal` (ligado?) |
+| `GET /info` | `pronta`, `respondendo` (gerando uma resposta agora), `adapter`, `fake`, `fila`, `terminal` (ligado?) |
 | `GET /conversas` | as conversas, com a `previa` (começo da última resposta) |
 | `POST /conversas` | cria (`{"titulo"}`, encurtado em 46 caracteres) -> `id`, `titulo` |
 | `GET /conversas/{id}` | a conversa com as mensagens (o `meta` do assistant traz think, tools e tempos; `foto` é o nome da foto ou `null`) e `gerando` |
@@ -62,6 +64,7 @@ aparelho que o Tailscale deixa chegar no Mac.
 | `DELETE /conversas/{id}` | apaga, junto com as fotos dela e os vetores do RAG das mensagens dela |
 | `GET /conversas/{id}/export` | markdown |
 | `POST /chat` | `{"conversa", "msg", "foto"}` -> stream SSE (`foto` opcional: JPEG, PNG ou WebP em base64; com foto, `msg` pode vir vazia) |
+| `POST /ouvir` | `{"audio"}` (WAV 16 kHz, mono, 16 bits, até 30 s, em base64) -> `texto` e `comando` (`"enviar"`, `"apagar"` ou `null`, já tirado do texto) |
 | `GET /terminal/estado` | `tem_senha` |
 | `POST /terminal/entrar` | `{"senha"}` -> `sessao`, `pasta` (sem senha no banco, cria esta) |
 | `POST /terminal/rodar` | `{"cmd", "pasta"}` -> stream SSE: `saida` (`d`) ... `fim` (`codigo`, `s`, `pasta` onde terminou) |
@@ -91,17 +94,18 @@ a mesma foto sai da memória do cérebro, sem ler a foto de novo.
 
 | Código | Quando |
 |---|---|
-| 400 | msg vazia sem foto, foto que não abre (ou fora de JPEG/PNG/WebP, acima de 10 MB ou de 50 milhões de pixels), conversa que não existe, título vazio no PATCH, senha nova curta, pasta que não existe |
+| 400 | msg vazia sem foto, foto que não abre (ou fora de JPEG/PNG/WebP, acima de 10 MB ou de 50 milhões de pixels), áudio que não é base64 ou não é um WAV inteiro de 16 kHz mono 16 bits, conversa que não existe, título vazio no PATCH, senha nova curta, pasta que não existe |
 | 401 | terminal: senha errada (diz quantas faltam) ou sessão expirada |
 | 404 | conversa ou foto que não existe; terminal desligado |
-| 409 | `/chat` com a ADA ainda respondendo o pedido anterior (um por vez); terminal com comando rodando, ou parar sem nada rodando |
+| 409 | `/chat` com a ADA ainda respondendo o pedido anterior (um por vez); `/ouvir` que esperou 30 s e o pedaço anterior ainda não acabou; terminal com comando rodando, ou parar sem nada rodando |
+| 411 | corpo em pedaços (`Transfer-Encoding`), com ou sem `Content-Length`: o tamanho dos pedaços não dá pra barrar antes de ler |
 | 413 | corpo acima do teto (a foto de 10 MB em base64, o texto e folga) |
 | 423 | terminal travado por 5 senhas erradas seguidas (15 min) |
-| 422 | corpo fora do formato ou texto acima de 20 mil caracteres (no terminal: comando até 4 mil, pasta até mil, senha até 200) |
+| 422 | corpo fora do formato, texto acima de 20 mil caracteres ou áudio acima de ~30 s (o base64 passa do teto) (no terminal: comando até 4 mil, pasta até mil, senha até 200) |
 | 429 | mais de 120 requisições no último minuto |
-| 503 | `/chat` antes da ADA terminar de carregar |
+| 503 | `/chat` antes da ADA terminar de carregar; `/ouvir` antes do Whisper abrir (uns 2 s depois de subir) ou com ele quebrado (o motivo fica no log da API) |
 
-400, 401, 404, 409, 413, 423 e 503 vêm como `{"erro": "..."}`; 422 e 429 no formato padrão do FastAPI, `{"detail": ...}`.
+400, 401, 404, 409, 411, 413, 423 e 503 vêm como `{"erro": "..."}`; 422 e 429 no formato padrão do FastAPI, `{"detail": ...}`.
 A exceção é o 404 do terminal barrado: vem como `{"detail": "Not Found"}`, igual ao de uma rota que não existe.
 
 ## Terminal do Mac

@@ -24,6 +24,11 @@ MAX_LADO_DA_FOTO = 1024
 # as mais antigas ficam no histórico só pelo texto
 MAX_FOTOS_NO_CONTEXTO = 4
 
+# um pedaço de fala do app: WAV de 16 kHz, mono, 16 bits, até 30 s (a janela do Whisper) mais o cabeçalho
+# de 44 bytes, ~960 KB; chega em base64. Cabe folgado no MAX_CORPO, que é o da foto
+MAX_AUDIO_BYTES = 30 * 16_000 * 2 + 44
+MAX_AUDIO_BASE64 = MAX_AUDIO_BYTES * 4 // 3 + 4
+
 # o app faz poucas por ação (lista, abre, manda); 120 dá folga até pra perguntar a cada segundo se a resposta saiu
 POR_MINUTO = 120
 
@@ -41,15 +46,22 @@ async def por_minuto():
 
 
 class TamanhoDoCorpo:
-    """Middleware ASGI puro: corpo declarado acima de MAX_CORPO volta 413 antes do FastAPI ler tudo pra memória.
-    Só olha o cabeçalho do pedido e passa o resto intocado: não embrulha a resposta (o stream do /chat)."""
+    """Middleware ASGI puro: corpo declarado acima de MAX_CORPO volta 413 antes do FastAPI ler tudo pra memória, e
+    corpo em pedaços (chunked) volta 411, mesmo com Content-Length junto (o servidor lê os pedaços e ignora o tamanho
+    declarado; o app sempre manda só o Content-Length). Só olha o cabeçalho do pedido e passa o resto intocado: não
+    embrulha a resposta (o stream do /chat)."""
 
     def __init__(self, app):
         self.app = app
 
     async def __call__(self, scope, receive, send):
         if scope["type"] == "http":
-            declarado = dict(scope["headers"]).get(b"content-length", b"0")
+            cabecalhos = dict(scope["headers"])
+            if b"transfer-encoding" in cabecalhos:
+                await JSONResponse({"erro": "o pedido tem que vir inteiro, com o tamanho (Content-Length)"},
+                                   status_code=411)(scope, receive, send)
+                return
+            declarado = cabecalhos.get(b"content-length", b"0")
             if not declarado.isdigit() or int(declarado) > MAX_CORPO:
                 await JSONResponse({"erro": "pedido grande demais"}, status_code=413)(scope, receive, send)
                 return
