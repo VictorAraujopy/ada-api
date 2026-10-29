@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from api import config
 from conhecimento.conhecimento import guardar  # 1_ada do core: o config acima põe ele no sys.path
 
-# Config, system prompt e params de geração vivem TODOS no núcleo (1_ada/cerebro.py): aqui só importa e repassa.
+# Config, system prompt e params de geração vivem TODOS no núcleo (1_ada/cerebro/cerebro.py): aqui só importa e repassa.
 # No modo FAKE o núcleo nem é carregado, então o system fica vazio (os eventos de mentira ignoram).
 SYSTEM = ""  # preenchido quando o modelo carrega
 
@@ -83,7 +83,7 @@ def _rodar():
         gerar = _eventos_fake
         print("[api] MODO FAKE — sem modelo, eventos de mentira")
     else:
-        import cerebro  # núcleo da ADA (só carrega o modelo fora do modo FAKE)
+        from cerebro import cerebro  # núcleo da ADA (só carrega o modelo fora do modo FAKE)
 
         config_modelo = cerebro.configurar()
         SYSTEM = config_modelo.system

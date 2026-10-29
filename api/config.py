@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 RAIZ = Path(__file__).resolve().parent.parent  # a pasta do ada-api
 # núcleo da ADA: o repo do core, do lado deste (ADA_CORE troca o caminho)
 CORE = Path(os.environ.get("ADA_CORE") or RAIZ.parent / "core").resolve()
-if not (CORE / "1_ada" / "cerebro.py").exists():
+if not (CORE / "1_ada" / "cerebro" / "cerebro.py").exists():
     sys.exit(f"não achei o núcleo da ADA em {CORE} (ADA_CORE=<pasta do core>)")
 sys.path.insert(0, str(CORE / "1_ada"))
 load_dotenv(CORE / ".env")  # não sobrescreve variável que já veio do terminal
