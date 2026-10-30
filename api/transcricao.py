@@ -1,9 +1,9 @@
-"""O ouvido da ADA dentro da API: o Whisper do core (1_ada/voz) aberto uma vez numa thread, e uma transcrição por vez.
+"""O ouvido da ADA dentro da API: o Whisper do core (1_ada/ouvido) aberto uma vez numa thread, e uma transcrição por vez.
 A rota POST /ouvir (rotas/ouvir.py) só traduz o HTTP e chama daqui; ela não importa nada do core."""
 import threading
 
 from api import config  # noqa: F401  (importar o config põe o 1_ada do core no sys.path)
-from voz import ouvido
+from ouvido import ouvido
 
 AudioInvalido = ouvido.AudioInvalido  # áudio fora do formato: a rota devolve 400
 

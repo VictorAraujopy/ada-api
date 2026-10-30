@@ -16,7 +16,7 @@ api/
   senha.py           a senha do terminal: só o hash (scrypt) no banco; trocar pelo Mac
   terminal.py        o terminal do Mac: sessão, trava por senha errada, o comando e o Ctrl+C
   worker.py          a thread dona do modelo: fila de entrada, Job, pronta, modo fake; grava pergunta + resposta
-  transcricao.py     o ouvido: abre o Whisper do core (1_ada/voz) numa thread e transcreve um pedaço por vez
+  transcricao.py     o ouvido: abre o Whisper do core (1_ada/ouvido) numa thread e transcreve um pedaço por vez
   armazem.py         SQLite: conversas e mensagens, com o nome da foto
   rotas/
     info.py          GET /info
